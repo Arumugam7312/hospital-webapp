@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { 
@@ -12,17 +13,22 @@ import {
   MapPin,
   Heart,
   Activity,
-  Award
+  Award,
+  Star,
+  Menu,
+  X
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 
 export function LandingPage() {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950">
       {/* Navigation */}
-      <nav className="h-20 flex items-center justify-between px-8 md:px-20 border-b border-slate-100 dark:border-slate-900 sticky top-0 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md z-50">
+      <nav className="h-20 flex items-center justify-between px-6 md:px-20 border-b border-slate-100 dark:border-slate-900 sticky top-0 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md z-50">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center text-white shadow-lg shadow-primary/20">
             <Stethoscope size={24} />
@@ -30,7 +36,7 @@ export function LandingPage() {
           <span className="text-xl font-black tracking-tight text-slate-900 dark:text-white">MedSync</span>
         </div>
         
-        <div className="hidden md:flex items-center gap-8 text-sm font-bold text-slate-600 dark:text-slate-400">
+        <div className="hidden lg:flex items-center gap-8 text-sm font-bold text-slate-600 dark:text-slate-400">
           <a href="#services" className="hover:text-primary transition-colors">Services</a>
           <Link to="/doctors" className="hover:text-primary transition-colors">Specialists</Link>
           <Link to="/about" className="hover:text-primary transition-colors">About Us</Link>
@@ -38,14 +44,49 @@ export function LandingPage() {
         </div>
 
         <div className="flex items-center gap-4">
-          <Link to="/login">
-            <Button variant="ghost" className="font-bold">Login</Button>
-          </Link>
-          <Link to="/login">
-            <Button className="rounded-xl px-6">Book Now</Button>
-          </Link>
+          <div className="hidden sm:flex items-center gap-4">
+            <Link to="/login">
+              <Button variant="ghost" className="font-bold">Login</Button>
+            </Link>
+            <Link to="/login">
+              <Button className="rounded-xl px-6">Book Now</Button>
+            </Link>
+          </div>
+          <button 
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            className="lg:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-900 text-slate-600 dark:text-slate-400"
+          >
+            {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
         </div>
       </nav>
+
+      {/* Mobile Menu */}
+      <AnimatePresence>
+        {isMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="fixed inset-x-0 top-20 bg-white dark:bg-slate-950 border-b border-slate-100 dark:border-slate-900 z-40 lg:hidden p-6 space-y-4 shadow-xl"
+          >
+            <div className="flex flex-col gap-4">
+              <a href="#services" onClick={() => setIsMenuOpen(false)} className="text-lg font-bold text-slate-600 dark:text-slate-400">Services</a>
+              <Link to="/doctors" onClick={() => setIsMenuOpen(false)} className="text-lg font-bold text-slate-600 dark:text-slate-400">Specialists</Link>
+              <Link to="/about" onClick={() => setIsMenuOpen(false)} className="text-lg font-bold text-slate-600 dark:text-slate-400">About Us</Link>
+              <Link to="/contact" onClick={() => setIsMenuOpen(false)} className="text-lg font-bold text-slate-600 dark:text-slate-400">Contact</Link>
+              <div className="pt-4 flex flex-col gap-3">
+                <Link to="/login" onClick={() => setIsMenuOpen(false)}>
+                  <Button variant="outline" className="w-full py-6">Login</Button>
+                </Link>
+                <Link to="/login" onClick={() => setIsMenuOpen(false)}>
+                  <Button className="w-full py-6">Book Appointment</Button>
+                </Link>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Hero Section */}
       <section className="relative py-20 md:py-32 px-8 md:px-20 overflow-hidden">
@@ -60,7 +101,7 @@ export function LandingPage() {
               <ShieldCheck size={14} />
               Trusted by 50,000+ Patients
             </div>
-            <h1 className="text-6xl md:text-7xl font-black tracking-tight text-slate-900 dark:text-white leading-[1.1]">
+            <h1 className="text-5xl md:text-7xl font-black tracking-tight text-slate-900 dark:text-white leading-[1.1]">
               Your Health, <br />
               <span className="text-primary">Our Priority.</span>
             </h1>
@@ -81,11 +122,11 @@ export function LandingPage() {
             <div className="flex items-center gap-8 pt-4">
               <div className="flex -space-x-3">
                 {[1,2,3,4].map(i => (
-                  <div key={i} className="w-12 h-12 rounded-full border-4 border-white dark:border-slate-950 bg-slate-200 overflow-hidden">
+                  <div key={i} className="w-10 h-10 md:w-12 md:h-12 rounded-full border-4 border-white dark:border-slate-950 bg-slate-200 overflow-hidden">
                     <img src={`https://i.pravatar.cc/150?u=${i}`} alt="user" />
                   </div>
                 ))}
-                <div className="w-12 h-12 rounded-full border-4 border-white dark:border-slate-950 bg-primary flex items-center justify-center text-white text-xs font-bold">
+                <div className="w-10 h-10 md:w-12 md:h-12 rounded-full border-4 border-white dark:border-slate-950 bg-primary flex items-center justify-center text-white text-[10px] md:text-xs font-bold">
                   +2k
                 </div>
               </div>
@@ -93,7 +134,7 @@ export function LandingPage() {
                 <div className="flex text-yellow-400 mb-1">
                   {[1,2,3,4,5].map(i => <Star key={i} size={14} className="fill-current" />)}
                 </div>
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">4.9/5 Patient Satisfaction</p>
+                <p className="text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-widest">4.9/5 Patient Satisfaction</p>
               </div>
             </div>
           </motion.div>
@@ -228,8 +269,4 @@ export function LandingPage() {
       </footer>
     </div>
   );
-}
-
-function Star({ size, className }: { size: number, className?: string }) {
-  return <span className={cn("material-symbols-outlined", className)} style={{ fontSize: size }}>star</span>;
 }

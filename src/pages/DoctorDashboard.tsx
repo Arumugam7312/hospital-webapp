@@ -29,6 +29,7 @@ export function DoctorDashboard() {
   const [appointments, setAppointments] = useState<any[]>([]);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [schedule, setSchedule] = useState<any[]>([]);
+  const [localSchedule, setLocalSchedule] = useState<any[]>([]);
   const [isSavingSchedule, setIsSavingSchedule] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
   const [medicalData, setMedicalData] = useState({ diagnosis: '', prescription: '' });
@@ -48,30 +49,47 @@ export function DoctorDashboard() {
     fetchSchedule();
   }, [user]);
 
-  const handleUpdateSchedule = async (day: string, slots: any[]) => {
+  useEffect(() => {
+    if (showScheduleModal) {
+      setLocalSchedule(JSON.parse(JSON.stringify(schedule)));
+    }
+  }, [showScheduleModal, schedule]);
+
+  const handleSaveAllSchedule = async () => {
     setIsSavingSchedule(true);
     try {
-      const res = await fetch('/api/doctors/schedule', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          doctor_id: user?.id,
-          day_of_week: day,
-          slots: slots
-        })
-      });
-      if (res.ok) {
-        showToast(`Schedule for ${day} updated`, 'success');
-        fetchSchedule();
-      } else {
-        showToast('Failed to update schedule', 'error');
+      // We need to update each day that changed. 
+      // For simplicity, we'll just update all days that are in localSchedule.
+      const daysToUpdate = days;
+      
+      for (const day of daysToUpdate) {
+        const daySlots = localSchedule.filter(s => s.day_of_week === day);
+        await fetch('/api/doctors/schedule', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            doctor_id: user?.id,
+            day_of_week: day,
+            slots: daySlots
+          })
+        });
       }
+      
+      showToast('Weekly schedule updated successfully', 'success');
+      fetchSchedule();
+      setShowScheduleModal(false);
     } catch (err) {
-      showToast('Connection error', 'error');
-      console.error(err);
+      showToast('Failed to save schedule', 'error');
     } finally {
       setIsSavingSchedule(false);
     }
+  };
+
+  const updateLocalDaySlots = (day: string, newSlots: any[]) => {
+    setLocalSchedule(prev => {
+      const filtered = prev.filter(s => s.day_of_week !== day);
+      return [...filtered, ...newSlots.map(s => ({ ...s, day_of_week: day }))];
+    });
   };
 
   useEffect(() => {
@@ -152,32 +170,43 @@ export function DoctorDashboard() {
       </div>
 
       {showScheduleModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-sm">
-          <Card className="w-full max-w-2xl p-8 space-y-6 max-h-[90vh] overflow-y-auto" title="Manage Weekly Schedule" description="Set specific time slots or block off days entirely.">
-            <div className="space-y-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-sm overflow-y-auto">
+          <Card className="w-full max-w-2xl p-4 md:p-8 space-y-6 my-8" title="Manage Weekly Schedule" description="Set specific time slots or block off days entirely.">
+            <div className="space-y-4">
               {days.map((day) => {
-                const daySlots = schedule.filter(s => s.day_of_week === day);
+                const daySlots = localSchedule.filter(s => s.day_of_week === day);
                 const isBlocked = daySlots.length === 0 || daySlots.every(s => !s.is_available);
                 
                 return (
                   <div key={day} className="space-y-3 p-4 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="font-black text-slate-900 dark:text-white uppercase tracking-wider text-sm">{day}</div>
                       <div className="flex items-center gap-4">
                         <label className="flex items-center gap-2 cursor-pointer">
-                          <input 
-                            type="checkbox" 
-                            checked={!isBlocked}
-                            onChange={(e) => {
-                              if (!e.target.checked) {
-                                handleUpdateSchedule(day, []);
-                              } else if (daySlots.length === 0) {
-                                handleUpdateSchedule(day, [{ start_time: '09:00', end_time: '17:00', is_available: 1 }]);
-                              }
-                            }}
-                            className="rounded border-slate-300 text-primary focus:ring-primary"
-                          />
-                          <span className="text-xs font-bold text-slate-600 dark:text-slate-400">Available</span>
+                          <div className={cn(
+                            "w-10 h-5 rounded-full transition-colors relative",
+                            !isBlocked ? "bg-primary" : "bg-slate-300 dark:bg-slate-700"
+                          )}>
+                            <input 
+                              type="checkbox" 
+                              className="sr-only"
+                              checked={!isBlocked}
+                              onChange={(e) => {
+                                if (!e.target.checked) {
+                                  updateLocalDaySlots(day, []);
+                                } else if (daySlots.length === 0) {
+                                  updateLocalDaySlots(day, [{ start_time: '09:00', end_time: '17:00', is_available: 1 }]);
+                                }
+                              }}
+                            />
+                            <div className={cn(
+                              "absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform",
+                              !isBlocked ? "translate-x-5" : "translate-x-0"
+                            )} />
+                          </div>
+                          <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                            {!isBlocked ? 'Available' : 'Unavailable'}
+                          </span>
                         </label>
                         {!isBlocked && (
                           <Button 
@@ -186,7 +215,7 @@ export function DoctorDashboard() {
                             className="h-7 px-2 text-[10px]"
                             onClick={() => {
                               const newSlots = [...daySlots, { start_time: '09:00', end_time: '17:00', is_available: 1 }];
-                              handleUpdateSchedule(day, newSlots);
+                              updateLocalDaySlots(day, newSlots);
                             }}
                           >
                             <Plus size={14} className="mr-1" /> Add Slot
@@ -196,36 +225,36 @@ export function DoctorDashboard() {
                     </div>
 
                     {!isBlocked && (
-                      <div className="space-y-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {daySlots.map((slot, idx) => (
-                          <div key={idx} className="flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
-                            <input 
-                              type="time" 
-                              className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-primary"
-                              value={slot.start_time}
-                              onChange={(e) => {
-                                const newSlots = [...daySlots];
-                                newSlots[idx].start_time = e.target.value;
-                                setSchedule(prev => prev.map(s => s.id === slot.id ? { ...s, start_time: e.target.value } : s));
-                              }}
-                              onBlur={() => handleUpdateSchedule(day, daySlots)}
-                            />
-                            <span className="text-slate-400 text-xs">to</span>
-                            <input 
-                              type="time" 
-                              className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-primary"
-                              value={slot.end_time}
-                              onChange={(e) => {
-                                const newSlots = [...daySlots];
-                                newSlots[idx].end_time = e.target.value;
-                                setSchedule(prev => prev.map(s => s.id === slot.id ? { ...s, end_time: e.target.value } : s));
-                              }}
-                              onBlur={() => handleUpdateSchedule(day, daySlots)}
-                            />
+                          <div key={idx} className="flex items-center gap-2 p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 animate-in fade-in slide-in-from-top-1">
+                            <div className="flex-1 flex items-center gap-2">
+                              <input 
+                                type="time" 
+                                className="w-full bg-transparent text-xs outline-none focus:text-primary"
+                                value={slot.start_time}
+                                onChange={(e) => {
+                                  const newSlots = [...daySlots];
+                                  newSlots[idx].start_time = e.target.value;
+                                  updateLocalDaySlots(day, newSlots);
+                                }}
+                              />
+                              <span className="text-slate-400 text-[10px] uppercase font-bold">to</span>
+                              <input 
+                                type="time" 
+                                className="w-full bg-transparent text-xs outline-none focus:text-primary"
+                                value={slot.end_time}
+                                onChange={(e) => {
+                                  const newSlots = [...daySlots];
+                                  newSlots[idx].end_time = e.target.value;
+                                  updateLocalDaySlots(day, newSlots);
+                                }}
+                              />
+                            </div>
                             <button 
                               onClick={() => {
                                 const newSlots = daySlots.filter((_, i) => i !== idx);
-                                handleUpdateSchedule(day, newSlots);
+                                updateLocalDaySlots(day, newSlots);
                               }}
                               className="p-1 text-slate-400 hover:text-red-500 transition-colors"
                             >
@@ -236,14 +265,17 @@ export function DoctorDashboard() {
                       </div>
                     )}
                     {isBlocked && (
-                      <p className="text-[10px] font-bold text-slate-400 italic">Day blocked - no available slots</p>
+                      <p className="text-[10px] font-bold text-slate-400 italic">Day marked as fully unavailable</p>
                     )}
                   </div>
                 );
               })}
             </div>
-            <div className="flex justify-end pt-4 border-t border-slate-100 dark:border-slate-800">
-              <Button onClick={() => setShowScheduleModal(false)}>Close Management</Button>
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+              <Button variant="outline" onClick={() => setShowScheduleModal(false)}>Cancel</Button>
+              <Button onClick={handleSaveAllSchedule} disabled={isSavingSchedule}>
+                {isSavingSchedule ? 'Saving...' : 'Save Weekly Schedule'}
+              </Button>
             </div>
           </Card>
         </div>

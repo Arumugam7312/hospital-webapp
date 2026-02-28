@@ -27,9 +27,41 @@ db.exec(`
     gender TEXT,
     age INTEGER,
     phone TEXT,
-    address TEXT
+    address TEXT,
+    is_available INTEGER DEFAULT 1
   );
 
+  -- Migration: Add phone and address if they don't exist (for existing databases)
+  PRAGMA table_info(users);
+`);
+
+// Check if phone column exists, if not add it
+const tableInfo = db.prepare("PRAGMA table_info(users)").all() as any[];
+const hasPhone = tableInfo.some(col => col.name === 'phone');
+const hasAddress = tableInfo.some(col => col.name === 'address');
+const hasAvailability = tableInfo.some(col => col.name === 'is_available');
+
+const apptInfo = db.prepare("PRAGMA table_info(appointments)").all() as any[];
+const hasRating = apptInfo.some(col => col.name === 'rating');
+const hasComment = apptInfo.some(col => col.name === 'comment');
+
+if (!hasPhone) {
+  try { db.exec("ALTER TABLE users ADD COLUMN phone TEXT;"); } catch(e) {}
+}
+if (!hasAddress) {
+  try { db.exec("ALTER TABLE users ADD COLUMN address TEXT;"); } catch(e) {}
+}
+if (!hasAvailability) {
+  try { db.exec("ALTER TABLE users ADD COLUMN is_available INTEGER DEFAULT 1;"); } catch(e) {}
+}
+if (!hasRating) {
+  try { db.exec("ALTER TABLE appointments ADD COLUMN rating INTEGER;"); } catch(e) {}
+}
+if (!hasComment) {
+  try { db.exec("ALTER TABLE appointments ADD COLUMN comment TEXT;"); } catch(e) {}
+}
+
+db.exec(`
   CREATE TABLE IF NOT EXISTS appointments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     patient_id INTEGER,
@@ -41,6 +73,8 @@ db.exec(`
     fee REAL,
     diagnosis TEXT,
     prescription TEXT,
+    rating INTEGER,
+    comment TEXT,
     FOREIGN KEY(patient_id) REFERENCES users(id),
     FOREIGN KEY(doctor_id) REFERENCES users(id)
   );
@@ -53,6 +87,16 @@ db.exec(`
     end_time TEXT,
     slot_duration INTEGER DEFAULT 15,
     is_available BOOLEAN DEFAULT 1,
+    FOREIGN KEY(doctor_id) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS doctor_blocks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    doctor_id INTEGER,
+    date TEXT NOT NULL,
+    start_time TEXT,
+    end_time TEXT,
+    reason TEXT,
     FOREIGN KEY(doctor_id) REFERENCES users(id)
   );
 `);
@@ -159,6 +203,35 @@ async function startServer() {
     }
   });
 
+  app.patch("/api/profile/password", (req, res) => {
+    const { id, currentPassword, newPassword } = req.body;
+    try {
+      const user = db.prepare("SELECT password FROM users WHERE id = ?").get(id) as any;
+      if (!user || user.password !== currentPassword) {
+        return res.status(401).json({ error: "Incorrect current password" });
+      }
+
+      db.prepare("UPDATE users SET password = ? WHERE id = ?").run(newPassword, id);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to update password" });
+    }
+  });
+
+  app.patch("/api/doctors/:id/availability", (req, res) => {
+    const { id } = req.params;
+    const { is_available } = req.body;
+    try {
+      db.prepare("UPDATE users SET is_available = ? WHERE id = ?").run(is_available ? 1 : 0, id);
+      const updatedUser = db.prepare("SELECT * FROM users WHERE id = ?").get(id) as any;
+      const { password, ...userWithoutPassword } = updatedUser;
+      io.emit("doctor_availability_updated", { id: parseInt(id), is_available: !!is_available });
+      res.json(userWithoutPassword);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to update availability" });
+    }
+  });
+
   app.post("/api/doctors", (req, res) => {
     const { name, email, password, specialization, experience, avatar } = req.body;
     
@@ -201,7 +274,7 @@ async function startServer() {
   });
 
   app.get("/api/doctors", (req, res) => {
-    const doctors = db.prepare("SELECT id, name, email, role, avatar, specialization, experience, rating, reviews_count FROM users WHERE role = 'doctor'").all();
+    const doctors = db.prepare("SELECT id, name, email, role, avatar, specialization, experience, rating, reviews_count, is_available FROM users WHERE role = 'doctor'").all();
     res.json(doctors);
   });
 
@@ -329,6 +402,54 @@ async function startServer() {
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: "Failed to update schedule" });
+    }
+  });
+
+  app.get("/api/doctors/blocks/:id", (req, res) => {
+    const { id } = req.params;
+    const blocks = db.prepare("SELECT * FROM doctor_blocks WHERE doctor_id = ?").all(id);
+    res.json(blocks);
+  });
+
+  app.post("/api/doctors/blocks", (req, res) => {
+    const { doctor_id, date, start_time, end_time, reason } = req.body;
+    try {
+      db.prepare("INSERT INTO doctor_blocks (doctor_id, date, start_time, end_time, reason) VALUES (?, ?, ?, ?, ?)")
+        .run(doctor_id, date, start_time, end_time, reason);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to block time slot" });
+    }
+  });
+
+  app.delete("/api/doctors/blocks/:id", (req, res) => {
+    const { id } = req.params;
+    try {
+      db.prepare("DELETE FROM doctor_blocks WHERE id = ?").run(id);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to delete block" });
+    }
+  });
+
+  app.post("/api/appointments/:id/feedback", (req, res) => {
+    const { id } = req.params;
+    const { rating, comment } = req.body;
+    try {
+      // Update appointment
+      db.prepare("UPDATE appointments SET rating = ?, comment = ? WHERE id = ?").run(rating, comment, id);
+      
+      // Update doctor's overall rating
+      const appt = db.prepare("SELECT doctor_id FROM appointments WHERE id = ?").get(id) as any;
+      if (appt) {
+        const doctorId = appt.doctor_id;
+        const stats = db.prepare("SELECT AVG(rating) as avg_rating, COUNT(rating) as count FROM appointments WHERE doctor_id = ? AND rating IS NOT NULL").get(doctorId) as any;
+        db.prepare("UPDATE users SET rating = ?, reviews_count = ? WHERE id = ?").run(stats.avg_rating, stats.count, doctorId);
+      }
+      
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to save feedback" });
     }
   });
 

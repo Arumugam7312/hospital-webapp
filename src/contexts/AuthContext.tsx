@@ -9,6 +9,11 @@ interface User {
   specialization?: string;
   phone?: string;
   address?: string;
+  age?: string | number;
+  gender?: string;
+  experience?: number;
+  rating?: number;
+  is_available?: number | boolean;
 }
 
 interface AuthContextType {

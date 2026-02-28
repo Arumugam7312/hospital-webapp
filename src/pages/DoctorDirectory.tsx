@@ -1,21 +1,36 @@
 import { useState, useEffect } from 'react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { Search, Filter, Star, Clock, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { Search, Filter, Star, Clock, ChevronRight, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { cn } from '../lib/utils';
+import { useSocket } from '../contexts/SocketContext';
 
 export function DoctorDirectory() {
   const [doctors, setDoctors] = useState<any[]>([]);
   const [filter, setFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('rating');
+  const { socket } = useSocket();
 
   useEffect(() => {
     fetch('/api/doctors')
       .then(res => res.json())
       .then(data => setDoctors(data));
   }, []);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleAvailabilityUpdate = ({ id, is_available }: { id: number, is_available: boolean }) => {
+      setDoctors(prev => prev.map(d => d.id === id ? { ...d, is_available: is_available ? 1 : 0 } : d));
+    };
+
+    socket.on('doctor_availability_updated', handleAvailabilityUpdate);
+    return () => {
+      socket.off('doctor_availability_updated', handleAvailabilityUpdate);
+    };
+  }, [socket]);
 
   const departments = ['All', 'Cardiology', 'Neurology', 'Pediatrics', 'Orthopedics', 'Dermatology'];
 
@@ -100,9 +115,15 @@ export function DoctorDirectory() {
                 className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
               />
               <div className="absolute top-4 left-4">
-                <span className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md flex items-center gap-1">
-                  <span className="size-1.5 bg-green-500 rounded-full animate-pulse"></span> Available
-                </span>
+                {doctor.is_available ? (
+                  <span className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md flex items-center gap-1">
+                    <span className="size-1.5 bg-green-500 rounded-full animate-pulse"></span> Available
+                  </span>
+                ) : (
+                  <span className="bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md flex items-center gap-1">
+                    <span className="size-1.5 bg-rose-500 rounded-full"></span> Unavailable
+                  </span>
+                )}
               </div>
             </div>
             <div className="p-5 flex flex-col flex-1">
@@ -122,8 +143,10 @@ export function DoctorDirectory() {
               </div>
               <div className="mt-auto grid grid-cols-2 gap-3">
                 <Button variant="outline" size="sm">Details</Button>
-                <Link to={`/book/${doctor.id}`}>
-                  <Button size="sm" className="w-full">Book Now</Button>
+                <Link to={`/book/${doctor.id}`} className="w-full">
+                  <Button size="sm" className="w-full" disabled={!doctor.is_available}>
+                    {doctor.is_available ? 'Book Now' : 'Unavailable'}
+                  </Button>
                 </Link>
               </div>
             </div>

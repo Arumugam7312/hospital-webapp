@@ -17,11 +17,15 @@ import {
   ChevronRight,
   XCircle,
   FileText,
-  Pill
+  Pill,
+  Star,
+  MessageSquare,
+  Loader2
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { cn } from '../lib/utils';
 import { ConfirmationModal } from '../components/ui/ConfirmationModal';
+import { Modal } from '../components/ui/Modal';
 
 export function PatientDashboard() {
   const { user } = useAuth();
@@ -31,6 +35,37 @@ export function PatientDashboard() {
   const [cancellingId, setCancellingId] = useState<number | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
   const [selectedPastAppt, setSelectedPastAppt] = useState<any>(null);
+  const [feedbackApptId, setFeedbackApptId] = useState<number | null>(null);
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState('');
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
+
+  const handleFeedbackSubmit = async () => {
+    if (!feedbackApptId) return;
+    setIsSubmittingFeedback(true);
+    try {
+      const res = await fetch(`/api/appointments/${feedbackApptId}/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rating, comment })
+      });
+      if (res.ok) {
+        showToast('Feedback submitted. Thank you!', 'success');
+        setAppointments(prev => prev.map(appt => 
+          appt.id === feedbackApptId ? { ...appt, rating, comment } : appt
+        ));
+        setFeedbackApptId(null);
+        setRating(5);
+        setComment('');
+      } else {
+        showToast('Failed to submit feedback', 'error');
+      }
+    } catch (err) {
+      showToast('Connection error', 'error');
+    } finally {
+      setIsSubmittingFeedback(false);
+    }
+  };
 
   useEffect(() => {
     fetch(`/api/appointments?userId=${user?.id}&role=patient`)
@@ -196,10 +231,31 @@ export function PatientDashboard() {
                         <p className="text-xs text-slate-500">{appt.department} • {appt.date}</p>
                       </div>
                     </div>
-                    <Button variant="outline" size="sm" onClick={() => setSelectedPastAppt(selectedPastAppt?.id === appt.id ? null : appt)}>
-                      {selectedPastAppt?.id === appt.id ? 'Hide Details' : 'View Records'}
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setSelectedPastAppt(selectedPastAppt?.id === appt.id ? null : appt)}>
+                        {selectedPastAppt?.id === appt.id ? 'Hide Details' : 'View Records'}
+                      </Button>
+                      {!appt.rating && (
+                        <Button size="sm" onClick={() => setFeedbackApptId(appt.id)}>
+                          <Star size={14} className="mr-1" /> Provide Feedback
+                        </Button>
+                      )}
+                    </div>
                   </div>
+                  
+                  {appt.rating && (
+                    <div className="mb-4 p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="flex gap-0.5">
+                          {[...Array(5)].map((_, i) => (
+                            <Star key={i} size={10} className={cn(i < appt.rating ? "text-yellow-500 fill-yellow-500" : "text-slate-300")} />
+                          ))}
+                        </div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Your Feedback</span>
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-400 italic">"{appt.comment || 'No comment left.'}"</p>
+                    </div>
+                  )}
                   
                   {selectedPastAppt?.id === appt.id && (
                     <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
@@ -276,6 +332,56 @@ export function PatientDashboard() {
         confirmText="Yes, Cancel"
         variant="danger"
       />
+
+      <Modal
+        isOpen={!!feedbackApptId}
+        onClose={() => setFeedbackApptId(null)}
+        title="Provide Feedback"
+      >
+        <div className="space-y-6">
+          <div className="space-y-3 text-center">
+            <p className="text-sm text-slate-500">How was your experience with the doctor?</p>
+            <div className="flex justify-center gap-2">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  onClick={() => setRating(star)}
+                  className="transition-transform hover:scale-110 active:scale-95"
+                >
+                  <Star 
+                    size={32} 
+                    className={cn(
+                      "transition-colors",
+                      star <= rating ? "text-yellow-500 fill-yellow-500" : "text-slate-200 dark:text-slate-800"
+                    )} 
+                  />
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
+              <MessageSquare size={12} />
+              Your Comments
+            </label>
+            <textarea
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              placeholder="Share your experience (optional)..."
+              className="w-full p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 outline-none focus:ring-2 focus:ring-primary h-32 resize-none transition-all"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+            <Button variant="outline" onClick={() => setFeedbackApptId(null)}>Cancel</Button>
+            <Button onClick={handleFeedbackSubmit} disabled={isSubmittingFeedback}>
+              {isSubmittingFeedback && <Loader2 className="mr-2 animate-spin" size={16} />}
+              Submit Feedback
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -210,11 +210,11 @@ export function ProfilePage() {
             <div className="space-y-8">
               {/* Header Section */}
               <div className="relative mb-24 md:mb-16">
-                <div className="h-48 md:h-64 rounded-3xl bg-gradient-to-r from-primary to-indigo-600 overflow-hidden shadow-2xl shadow-primary/20 relative">
+                <div className="h-48 md:h-64 rounded-3xl bg-linear-to-r from-primary to-indigo-600 overflow-hidden shadow-2xl shadow-primary/20 relative">
                   <div className="absolute inset-0 bg-black/10" />
                   
                   {/* Action Buttons - Top right on mobile, bottom right on desktop */}
-                  <div className="absolute top-4 right-4 md:top-auto md:bottom-6 md:right-8 flex flex-col sm:flex-row gap-2 md:gap-3 z-20">
+                  <div className="absolute top-4 mb-20 right-4 md:top-auto md:bottom-6 md:right-8 flex flex-col sm:flex-row gap-2 md:gap-3 z-20">
                     {user?.role === 'doctor' && (
                       <Button 
                         onClick={handleToggleAvailability}

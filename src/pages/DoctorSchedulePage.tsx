@@ -47,7 +47,8 @@ export function DoctorSchedulePage() {
   const [blockData, setBlockData] = useState({
     start_time: '09:00',
     end_time: '17:00',
-    reason: ''
+    reason: '',
+    isFullDay: false
   });
 
   const fetchData = async () => {
@@ -86,7 +87,9 @@ export function DoctorSchedulePage() {
         body: JSON.stringify({
           doctor_id: user?.id,
           date: format(selectedDate, 'yyyy-MM-dd'),
-          ...blockData
+          start_time: blockData.isFullDay ? '00:00' : blockData.start_time,
+          end_time: blockData.isFullDay ? '23:59' : blockData.end_time,
+          reason: blockData.reason
         })
       });
       
@@ -184,7 +187,10 @@ export function DoctorSchedulePage() {
                     !isCurrentMonth ? "opacity-20" : "opacity-100",
                     isSelected 
                       ? "bg-primary border-primary text-white shadow-xl shadow-primary/30 scale-105 z-10" 
-                      : "bg-slate-50 dark:bg-slate-900 border-transparent hover:border-slate-200 dark:hover:border-slate-700",
+                      : cn(
+                          "bg-slate-50 dark:bg-slate-900 border-transparent hover:border-slate-200 dark:hover:border-slate-700",
+                          status.hasBlocks && "bg-red-50 dark:bg-red-900/10 border-red-100 dark:border-red-900/20"
+                        ),
                     isToday(day) && !isSelected && "border-primary/50 text-primary"
                   )}
                 >
@@ -197,9 +203,13 @@ export function DoctorSchedulePage() {
                       <div className={cn("size-1.5 rounded-full", isSelected ? "bg-white/50" : "bg-red-500")} />
                     )}
                   </div>
-                  {!status.isWorkingDay && isCurrentMonth && (
+                  {(!status.isWorkingDay || status.hasBlocks) && isCurrentMonth && (
                     <div className="absolute top-1 right-1">
-                      <Lock size={10} className={isSelected ? "text-white/50" : "text-slate-400"} />
+                      {status.hasBlocks ? (
+                        <AlertCircle size={10} className={isSelected ? "text-white/50" : "text-red-500"} />
+                      ) : (
+                        <Lock size={10} className={isSelected ? "text-white/50" : "text-slate-400"} />
+                      )}
                     </div>
                   )}
                 </button>
@@ -283,7 +293,7 @@ export function DoctorSchedulePage() {
                 <div className="size-2 rounded-full bg-primary" /> Appointment
               </div>
               <div className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-400">
-                <div className="size-2 rounded-full bg-red-500" /> Blocked
+                <AlertCircle size={12} className="text-red-500" /> Blocked Slot
               </div>
               <div className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-400">
                 <Lock size={12} className="text-slate-400" /> Not Working
@@ -303,26 +313,41 @@ export function DoctorSchedulePage() {
         title={`Block Time - ${format(selectedDate, 'MMM do')}`}
       >
         <div className="space-y-6">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Start Time</label>
-              <input 
-                type="time" 
-                value={blockData.start_time}
-                onChange={(e) => setBlockData({ ...blockData, start_time: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 outline-none focus:ring-2 focus:ring-primary"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">End Time</label>
-              <input 
-                type="time" 
-                value={blockData.end_time}
-                onChange={(e) => setBlockData({ ...blockData, end_time: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 outline-none focus:ring-2 focus:ring-primary"
-              />
-            </div>
+          <div className="flex items-center gap-3 p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
+            <input 
+              type="checkbox" 
+              id="fullDay"
+              checked={blockData.isFullDay}
+              onChange={(e) => setBlockData({ ...blockData, isFullDay: e.target.checked })}
+              className="size-5 rounded border-slate-300 text-primary focus:ring-primary"
+            />
+            <label htmlFor="fullDay" className="text-sm font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
+              Block Entire Day
+            </label>
           </div>
+
+          {!blockData.isFullDay && (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Start Time</label>
+                <input 
+                  type="time" 
+                  value={blockData.start_time}
+                  onChange={(e) => setBlockData({ ...blockData, start_time: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">End Time</label>
+                <input 
+                  type="time" 
+                  value={blockData.end_time}
+                  onChange={(e) => setBlockData({ ...blockData, end_time: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+            </div>
+          )}
           <div className="space-y-2">
             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Reason (Optional)</label>
             <input 

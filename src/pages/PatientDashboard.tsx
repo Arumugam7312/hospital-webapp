@@ -115,21 +115,29 @@ export function PatientDashboard() {
 
   const upcomingAppointments = appointments.filter(a => a.status !== 'completed' && a.status !== 'cancelled');
   const pastAppointments = appointments.filter(a => a.status === 'completed');
+  const cancelledAppointments = appointments.filter(a => a.status === 'cancelled');
+  const confirmedAppointments = appointments.filter(a => a.status === 'confirmed');
+  const totalCompletedOrCancelled = appointments.filter(a => a.status === 'completed' || a.status === 'cancelled').length;
+  const successRate = totalCompletedOrCancelled > 0 
+    ? Math.round((appointments.filter(a => a.status === 'completed').length / totalCompletedOrCancelled) * 100) 
+    : 100;
 
   const stats = [
-    { label: 'Upcoming Appointment', value: upcomingAppointments[0]?.date || 'None', sub: upcomingAppointments[0]?.doctor_name || 'No scheduled visits', icon: CalendarIcon, color: 'text-primary', bg: 'bg-primary/10' },
-    { label: 'Total Bookings', value: appointments.length.toString(), sub: 'Past & Scheduled', icon: BookOpen, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-    { label: 'Last Visit', value: pastAppointments[0]?.date || 'N/A', sub: pastAppointments[0]?.department || 'No past visits', icon: History, color: 'text-purple-500', bg: 'bg-purple-500/10' },
+    { label: 'Upcoming Visit', value: upcomingAppointments[0]?.date || 'None', sub: upcomingAppointments[0]?.doctor_name || 'No scheduled visits', icon: CalendarIcon, color: 'text-primary', bg: 'bg-primary/10' },
+    { label: 'Booking Success', value: `${successRate}%`, sub: 'Completion Rate', icon: CheckCircle2, color: 'text-green-500', bg: 'bg-green-500/10' },
+    { label: 'Cancelled', value: cancelledAppointments.length.toString(), sub: 'Total Cancelled', icon: XCircle, color: 'text-red-500', bg: 'bg-red-500/10' },
   ];
+
+  const [activeTab, setActiveTab] = useState<'active' | 'cancelled'>('active');
 
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white mb-2">Welcome back, {user?.name.split(' ')[0]}</h1>
-        <p className="text-slate-500 dark:text-slate-400">Here is a quick overview of your health activities and appointments.</p>
+        <h1 className="text-2xl md:text-3xl font-black tracking-tight text-slate-900 dark:text-white mb-2">Welcome back, {user?.name.split(' ')[0]}</h1>
+        <p className="text-sm md:text-base text-slate-500 dark:text-slate-400">Here is a quick overview of your health activities and appointments.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {stats.map((stat, i) => (
           <Card key={i} className="flex items-start justify-between">
             <div>
@@ -148,96 +156,166 @@ export function PatientDashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">
-          <Card 
-            title="Active Bookings" 
-            headerAction={<Button variant="ghost" size="sm">View All</Button>}
-            className="p-0"
-          >
+          <Card className="p-0 overflow-hidden">
+            <div className="flex border-b border-slate-100 dark:border-slate-800">
+              <button 
+                onClick={() => setActiveTab('active')}
+                className={cn(
+                  "flex-1 py-4 text-xs font-black uppercase tracking-widest transition-all",
+                  activeTab === 'active' ? "text-primary border-b-2 border-primary bg-primary/5" : "text-slate-400 hover:text-slate-600"
+                )}
+              >
+                Active Bookings ({upcomingAppointments.length})
+              </button>
+              <button 
+                onClick={() => setActiveTab('cancelled')}
+                className={cn(
+                  "flex-1 py-4 text-xs font-black uppercase tracking-widest transition-all",
+                  activeTab === 'cancelled' ? "text-red-500 border-b-2 border-red-500 bg-red-500/5" : "text-slate-400 hover:text-slate-600"
+                )}
+              >
+                Cancelled ({cancelledAppointments.length})
+              </button>
+            </div>
+
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider">
-                    <th className="px-6 py-4">Doctor Name</th>
-                    <th className="px-6 py-4">Department</th>
-                    <th className="px-6 py-4">Date</th>
-                    <th className="px-6 py-4">Time</th>
-                    <th className="px-6 py-4">Status</th>
-                    <th className="px-6 py-4 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {upcomingAppointments.map((appt) => (
-                    <tr key={appt.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                            <Stethoscope size={14} />
+              {activeTab === 'active' ? (
+                <table className="w-full text-left border-collapse min-w-[600px]">
+                  <thead>
+                    <tr className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider">
+                      <th className="px-6 py-4">Doctor Name</th>
+                      <th className="px-6 py-4">Department</th>
+                      <th className="px-6 py-4">Date</th>
+                      <th className="px-6 py-4">Time</th>
+                      <th className="px-6 py-4">Status</th>
+                      <th className="px-6 py-4 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {upcomingAppointments.map((appt) => (
+                      <tr key={appt.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary overflow-hidden">
+                              {appt.doctor_avatar ? (
+                                <img src={appt.doctor_avatar} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <Stethoscope size={14} />
+                              )}
+                            </div>
+                            <span className="font-bold text-slate-900 dark:text-white">{appt.doctor_name}</span>
                           </div>
-                          <span className="font-bold text-slate-900 dark:text-white">{appt.doctor_name}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{appt.department}</td>
-                      <td className="px-6 py-4 text-sm text-slate-900 dark:text-white">{appt.date}</td>
-                      <td className="px-6 py-4 text-sm text-slate-900 dark:text-white">{appt.time}</td>
-                      <td className="px-6 py-4">
-                        <span className={cn(
-                          "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
-                          appt.status === 'confirmed' ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
-                          appt.status === 'pending' ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" :
-                          "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
-                        )}>
-                          {appt.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          {appt.status === 'pending' && (
-                            <button 
-                              onClick={() => setCancellingId(appt.id)}
-                              className="p-2 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors"
-                              title="Cancel Appointment"
-                            >
-                              <XCircle size={18} />
+                        </td>
+                        <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{appt.department}</td>
+                        <td className="px-6 py-4 text-sm text-slate-900 dark:text-white">{appt.date}</td>
+                        <td className="px-6 py-4 text-sm text-slate-900 dark:text-white">{appt.time}</td>
+                        <td className="px-6 py-4">
+                          <span className={cn(
+                            "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
+                            appt.status === 'confirmed' ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
+                            appt.status === 'pending' ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" :
+                            "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                          )}>
+                            {appt.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {appt.status === 'pending' && (
+                              <button 
+                                onClick={() => setCancellingId(appt.id)}
+                                className="p-2 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors"
+                                title="Cancel Appointment"
+                              >
+                                <XCircle size={18} />
+                              </button>
+                            )}
+                            <button className="text-slate-400 hover:text-primary transition-colors">
+                              <MoreVertical size={18} />
                             </button>
-                          )}
-                          <button className="text-slate-400 hover:text-primary transition-colors">
-                            <MoreVertical size={18} />
-                          </button>
-                        </div>
-                      </td>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {upcomingAppointments.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-8 text-center text-slate-400 italic text-sm">No active appointments found.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              ) : (
+                <table className="w-full text-left border-collapse min-w-[600px]">
+                  <thead>
+                    <tr className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider">
+                      <th className="px-6 py-4">Doctor Name</th>
+                      <th className="px-6 py-4">Department</th>
+                      <th className="px-6 py-4">Date</th>
+                      <th className="px-6 py-4">Time</th>
+                      <th className="px-6 py-4">Status</th>
                     </tr>
-                  ))}
-                  {upcomingAppointments.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="px-6 py-8 text-center text-slate-400 italic text-sm">No active appointments found.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {cancelledAppointments.map((appt) => (
+                      <tr key={appt.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-500 overflow-hidden">
+                              {appt.doctor_avatar ? (
+                                <img src={appt.doctor_avatar} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <XCircle size={14} />
+                              )}
+                            </div>
+                            <span className="font-bold text-slate-900 dark:text-white">{appt.doctor_name}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{appt.department}</td>
+                        <td className="px-6 py-4 text-sm text-slate-900 dark:text-white">{appt.date}</td>
+                        <td className="px-6 py-4 text-sm text-slate-900 dark:text-white">{appt.time}</td>
+                        <td className="px-6 py-4">
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                            {appt.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    {cancelledAppointments.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="px-6 py-8 text-center text-slate-400 italic text-sm">No cancelled appointments found.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              )}
             </div>
           </Card>
 
           <Card title="Past Appointments & Medical Records" className="p-0">
             <div className="divide-y divide-slate-100 dark:divide-slate-800">
               {pastAppointments.map((appt) => (
-                <div key={appt.id} className="p-6 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-all">
-                  <div className="flex justify-between items-start mb-4">
+                <div key={appt.id} className="p-4 md:p-6 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-all">
+                  <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-4">
                     <div className="flex gap-4">
-                      <div className="size-12 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">
-                        <CalendarIcon size={24} />
+                      <div className="size-10 md:size-12 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 overflow-hidden shrink-0">
+                        {appt.doctor_avatar ? (
+                          <img src={appt.doctor_avatar} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <CalendarIcon size={20} className="md:size-6" />
+                        )}
                       </div>
                       <div>
-                        <h4 className="font-black text-slate-900 dark:text-white">{appt.doctor_name}</h4>
-                        <p className="text-xs text-slate-500">{appt.department} • {appt.date}</p>
+                        <h4 className="font-black text-sm md:text-base text-slate-900 dark:text-white">{appt.doctor_name}</h4>
+                        <p className="text-[10px] md:text-xs text-slate-500">{appt.department} • {appt.date}</p>
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => setSelectedPastAppt(selectedPastAppt?.id === appt.id ? null : appt)}>
+                    <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                      <Button variant="outline" size="sm" className="flex-1 sm:flex-none text-[10px] md:text-xs" onClick={() => setSelectedPastAppt(selectedPastAppt?.id === appt.id ? null : appt)}>
                         {selectedPastAppt?.id === appt.id ? 'Hide Details' : 'View Records'}
                       </Button>
                       {!appt.rating && (
-                        <Button size="sm" onClick={() => setFeedbackApptId(appt.id)}>
-                          <Star size={14} className="mr-1" /> Provide Feedback
+                        <Button size="sm" className="flex-1 sm:flex-none text-[10px] md:text-xs" onClick={() => setFeedbackApptId(appt.id)}>
+                          <Star size={12} className="mr-1" /> Provide Feedback
                         </Button>
                       )}
                     </div>

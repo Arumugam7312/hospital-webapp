@@ -26,24 +26,80 @@ export function BookingFlow() {
   const [selectedTime, setSelectedTime] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('hospital');
   const [isBooking, setIsBooking] = useState(false);
+  const [error, setError] = useState('');
+  const [blocks, setBlocks] = useState<any[]>([]);
+  const [schedule, setSchedule] = useState<any[]>([]);
+  const [appointments, setAppointments] = useState<any[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(true);
 
   useEffect(() => {
-    fetch('/api/doctors')
-      .then(res => res.json())
-      .then(doctors => {
-        const d = doctors.find((doc: any) => doc.id === parseInt(doctorId!));
-        setDoctor(d);
-      });
+    if (!doctorId) return;
+    
+    setIsLoadingData(true);
+    Promise.all([
+      fetch('/api/doctors').then(res => res.json()),
+      fetch(`/api/doctors/schedule/${doctorId}`).then(res => res.json()),
+      fetch(`/api/doctors/blocks/${doctorId}`).then(res => res.json()),
+      fetch(`/api/appointments?userId=${doctorId}&role=doctor`).then(res => res.json())
+    ]).then(([doctors, sched, blks, appts]) => {
+      const d = doctors.find((doc: any) => doc.id === parseInt(doctorId!));
+      setDoctor(d);
+      setSchedule(sched);
+      setBlocks(blks);
+      setAppointments(appts);
+      setIsLoadingData(false);
+    }).catch(err => {
+      console.error(err);
+      setIsLoadingData(false);
+    });
   }, [doctorId]);
 
   const timeSlots = [
     '09:00 AM', '09:30 AM', '10:00 AM', '10:30 AM', 
-    '11:00 AM', '11:30 AM', '02:00 PM', '02:30 PM',
-    '03:00 PM', '03:30 PM', '04:00 PM', '04:30 PM'
+    '11:00 AM', '11:30 AM', '12:00 PM', '12:30 PM',
+    '02:00 PM', '02:30 PM', '03:00 PM', '03:30 PM', 
+    '04:00 PM', '04:30 PM', '05:00 PM'
   ];
+
+  const getSlotStatus = (slot: string, dateStr: string) => {
+    if (!dateStr) return { isAvailable: false };
+    
+    const date = new Date(dateStr);
+    const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'long' });
+    const slotTime = convertTo24Hour(slot);
+    
+    // 1. Check Weekly Schedule
+    const daySchedule = schedule.filter(s => s.day_of_week === dayOfWeek && s.is_available);
+    const isWorkingHour = daySchedule.some(s => slotTime >= s.start_time && slotTime < s.end_time);
+    if (!isWorkingHour) return { isAvailable: false, reason: 'Outside working hours' };
+
+    // 2. Check Blocked Slots
+    const dayBlocks = blocks.filter(b => b.date === dateStr);
+    const isBlocked = dayBlocks.some(b => slotTime >= b.start_time && slotTime < b.end_time);
+    if (isBlocked) return { isAvailable: false, reason: 'Doctor is busy' };
+
+    // 3. Check Already Booked Slots
+    const dayAppts = appointments.filter(a => a.date === dateStr && a.status !== 'cancelled');
+    const isBooked = dayAppts.some(a => a.time === slot);
+    if (isBooked) return { isAvailable: false, reason: 'Already booked' };
+
+    return { isAvailable: true };
+  };
+
+  const convertTo24Hour = (time12h: string) => {
+    const [time, modifier] = time12h.split(' ');
+    let [hours, minutes] = time.split(':');
+    if (hours === '12') {
+      hours = modifier === 'AM' ? '00' : '12';
+    } else if (modifier === 'PM') {
+      hours = (parseInt(hours, 10) + 12).toString();
+    }
+    return `${hours.padStart(2, '0')}:${minutes}`;
+  };
 
   const handleBook = async () => {
     setIsBooking(true);
+    setError('');
     try {
       const res = await fetch('/api/appointments', {
         method: 'POST',
@@ -57,17 +113,27 @@ export function BookingFlow() {
           fee: 150
         }),
       });
+      
       if (res.ok) {
         setStep(4);
+      } else {
+        const data = await res.json();
+        setError(data.error || 'Failed to book appointment');
       }
     } catch (err) {
       console.error(err);
+      setError('An unexpected error occurred');
     } finally {
       setIsBooking(false);
     }
   };
 
-  if (!doctor) return <div>Loading...</div>;
+  if (isLoadingData || !doctor) return (
+    <div className="min-h-[60vh] flex flex-col items-center justify-center space-y-4">
+      <div className="size-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      <p className="text-slate-500 font-bold animate-pulse">Loading doctor information...</p>
+    </div>
+  );
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
@@ -103,37 +169,62 @@ export function BookingFlow() {
           {step === 1 && (
             <Card title="Select Date & Time" description="Choose your preferred schedule for the consultation.">
               <div className="space-y-6">
+                {!doctor.is_available && (
+                  <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 text-red-600 dark:text-red-400 text-sm font-bold flex items-center gap-3">
+                    <div className="size-2 rounded-full bg-red-500 animate-pulse" />
+                    Doctor is currently unavailable for new bookings.
+                  </div>
+                )}
                 <div className="space-y-3">
                   <label className="text-xs font-black uppercase tracking-widest text-slate-400">Select Date</label>
                   <input 
                     type="date" 
-                    className="w-full p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-primary outline-none"
+                    className="w-full p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-primary outline-none disabled:opacity-50"
                     value={selectedDate}
+                    min={new Date().toISOString().split('T')[0]}
                     onChange={(e) => setSelectedDate(e.target.value)}
+                    disabled={!doctor.is_available}
                   />
                 </div>
                 <div className="space-y-3">
-                  <label className="text-xs font-black uppercase tracking-widest text-slate-400">Available Slots</label>
-                  <div className="grid grid-cols-3 gap-3">
-                    {timeSlots.map(slot => (
-                      <button
-                        key={slot}
-                        onClick={() => setSelectedTime(slot)}
-                        className={cn(
-                          "p-3 rounded-xl text-sm font-bold border transition-all",
-                          selectedTime === slot 
-                            ? "bg-primary border-primary text-white shadow-lg shadow-primary/20" 
-                            : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-primary/50"
-                        )}
-                      >
-                        {slot}
-                      </button>
-                    ))}
-                  </div>
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400">Select Time Slot</label>
+                  {selectedDate ? (
+                    <div className="grid grid-cols-3 gap-3">
+                      {timeSlots.map(slot => {
+                        const status = getSlotStatus(slot, selectedDate);
+                        const isSelected = selectedTime === slot;
+                        
+                        return (
+                          <button
+                            key={slot}
+                            disabled={!doctor.is_available || !status.isAvailable}
+                            onClick={() => setSelectedTime(slot)}
+                            className={cn(
+                              "group relative p-3 rounded-xl text-sm font-bold border transition-all disabled:opacity-40",
+                              isSelected 
+                                ? "bg-primary border-primary text-white shadow-lg shadow-primary/20" 
+                                : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-primary/50"
+                            )}
+                          >
+                            {slot}
+                            {!status.isAvailable && status.reason && (
+                              <div className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-800 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-20">
+                                {status.reason}
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="p-8 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-800 text-center">
+                      <p className="text-sm font-bold text-slate-400">Please select a date first</p>
+                    </div>
+                  )}
                 </div>
                 <Button 
                   className="w-full py-4 rounded-xl" 
-                  disabled={!selectedDate || !selectedTime}
+                  disabled={!selectedDate || !selectedTime || !doctor.is_available}
                   onClick={() => setStep(2)}
                 >
                   Continue to Payment
@@ -235,6 +326,11 @@ export function BookingFlow() {
                     </div>
                   </div>
                 </div>
+                {error && (
+                  <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 text-red-600 dark:text-red-400 text-sm font-bold">
+                    {error}
+                  </div>
+                )}
                 <div className="flex gap-4">
                   <Button variant="outline" className="flex-1 py-4 rounded-xl" onClick={() => setStep(2)}>Back</Button>
                   <Button className="flex-2 py-4 rounded-xl" isLoading={isBooking} onClick={handleBook}>Confirm Booking</Button>

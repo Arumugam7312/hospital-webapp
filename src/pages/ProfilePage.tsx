@@ -67,7 +67,7 @@ export function ProfilePage() {
     if (user?.role !== 'doctor') return;
     setIsUpdatingAvailability(true);
     try {
-      const newStatus = !user.is_available;
+      const newStatus = user.is_available ? 0 : 1;
       const res = await fetch(`/api/doctors/${user.id}/availability`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -209,14 +209,53 @@ export function ProfilePage() {
           {activeTab === 'general' && (
             <div className="space-y-8">
               {/* Header Section */}
-              <div className="relative h-48 rounded-3xl bg-gradient-to-r from-primary to-indigo-600 overflow-hidden shadow-2xl shadow-primary/20">
-                <div className="absolute inset-0 bg-black/10" />
-                <div className="absolute -bottom-12 left-8 flex items-end gap-6">
+              <div className="relative mb-24 md:mb-16">
+                <div className="h-48 md:h-64 rounded-3xl bg-gradient-to-r from-primary to-indigo-600 overflow-hidden shadow-2xl shadow-primary/20 relative">
+                  <div className="absolute inset-0 bg-black/10" />
+                  
+                  {/* Action Buttons - Top right on mobile, bottom right on desktop */}
+                  <div className="absolute top-4 right-4 md:top-auto md:bottom-6 md:right-8 flex flex-col sm:flex-row gap-2 md:gap-3 z-20">
+                    {user?.role === 'doctor' && (
+                      <Button 
+                        onClick={handleToggleAvailability}
+                        disabled={isUpdatingAvailability}
+                        className={cn(
+                          "backdrop-blur-md border transition-all duration-300 h-9 md:h-11 px-3 md:px-4 text-[10px] md:text-sm",
+                          user.is_available 
+                            ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/30" 
+                            : "bg-rose-500/20 border-rose-500/50 text-rose-400 hover:bg-rose-500/30"
+                        )}
+                      >
+                        {isUpdatingAvailability ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <div className={cn(
+                              "size-2 rounded-full animate-pulse",
+                              user.is_available ? "bg-emerald-400" : "bg-rose-400"
+                            )} />
+                            {user.is_available ? 'Available' : 'Unavailable'}
+                          </div>
+                        )}
+                      </Button>
+                    )}
+                    <Button 
+                      onClick={() => setIsEditModalOpen(true)}
+                      className="bg-white/20 backdrop-blur-md border border-white/30 text-white hover:bg-white/30 h-9 md:h-11 px-3 md:px-4 text-[10px] md:text-sm"
+                    >
+                      <Edit2 size={16} className="mr-2" />
+                      Edit Profile
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Profile Info - Overlapping */}
+                <div className="absolute -bottom-20 md:-bottom-12 left-0 right-0 md:left-8 md:right-auto flex flex-col md:flex-row items-center md:items-end gap-4 md:gap-6 px-4 md:px-0">
                   <div className="relative group">
                     <img 
-                      src={user?.avatar || `https://ui-avatars.com/api/?name=${user?.name}&background=random`} 
+                      src={user?.avatar || `https://ui-avatars.com/api/?name=${user?.name}&background=0D9488&color=fff`} 
                       alt={user?.name}
-                      className="size-32 rounded-3xl object-cover border-8 border-white dark:border-slate-900 shadow-2xl shadow-black/20"
+                      className="size-32 md:size-40 rounded-3xl object-cover border-4 md:border-8 border-white dark:border-slate-900 shadow-2xl shadow-black/20"
                     />
                     <button 
                       onClick={() => setIsEditModalOpen(true)}
@@ -225,53 +264,20 @@ export function ProfilePage() {
                       <Camera size={18} />
                     </button>
                   </div>
-                  <div className="pb-14 space-y-1">
-                    <div className="flex items-center gap-3">
-                      <h1 className="text-3xl font-black text-white drop-shadow-md">{user?.name}</h1>
-                      {user?.role === 'doctor' && <CheckCircle2 className="text-white fill-white/20" size={24} />}
+                  <div className="pb-0 md:pb-14 text-center md:text-left space-y-1">
+                    <div className="flex items-center justify-center md:justify-start gap-3">
+                      <h1 className="text-2xl md:text-4xl font-black text-slate-900 md:text-white drop-shadow-none md:drop-shadow-md">{user?.name}</h1>
+                      {user?.role === 'doctor' && <CheckCircle2 className="text-primary md:text-white fill-primary/10 md:fill-white/20" size={24} />}
                     </div>
-                    <p className="text-white/80 font-bold uppercase tracking-widest text-xs flex items-center gap-2">
+                    <p className="text-slate-500 md:text-white/80 font-bold uppercase tracking-widest text-[10px] md:text-xs flex items-center justify-center md:justify-start gap-2">
                       <Shield size={12} />
                       {user?.role} Account
                     </p>
                   </div>
                 </div>
-                <div className="absolute bottom-6 right-8 flex gap-3">
-                  {user?.role === 'doctor' && (
-                    <Button 
-                      onClick={handleToggleAvailability}
-                      disabled={isUpdatingAvailability}
-                      className={cn(
-                        "backdrop-blur-md border transition-all duration-300",
-                        user.is_available 
-                          ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/30" 
-                          : "bg-rose-500/20 border-rose-500/50 text-rose-400 hover:bg-rose-500/30"
-                      )}
-                    >
-                      {isUpdatingAvailability ? (
-                        <Loader2 size={16} className="animate-spin" />
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <div className={cn(
-                            "size-2 rounded-full animate-pulse",
-                            user.is_available ? "bg-emerald-400" : "bg-rose-400"
-                          )} />
-                          {user.is_available ? 'Available' : 'Unavailable'}
-                        </div>
-                      )}
-                    </Button>
-                  )}
-                  <Button 
-                    onClick={() => setIsEditModalOpen(true)}
-                    className="bg-white/20 backdrop-blur-md border border-white/30 text-white hover:bg-white/30"
-                  >
-                    <Edit2 size={16} className="mr-2" />
-                    Edit Profile
-                  </Button>
-                </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-16">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-24 md:mt-16">
                 {/* Left Column - Quick Stats/Info */}
                 <div className="space-y-6">
                   <Card className="p-6 space-y-6">
@@ -572,11 +578,11 @@ export function ProfilePage() {
 
             <div className="space-y-2 md:col-span-2">
               <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Profile Picture</label>
-              <div className="flex gap-4 items-center">
-                <div className="size-16 rounded-2xl bg-slate-100 dark:bg-slate-800 overflow-hidden border-2 border-slate-200 dark:border-slate-700">
+              <div className="flex flex-col sm:flex-row gap-4 items-center sm:items-start">
+                <div className="size-20 rounded-2xl bg-slate-100 dark:bg-slate-800 overflow-hidden border-2 border-slate-200 dark:border-slate-700 shrink-0">
                   <img src={formData.avatar || `https://ui-avatars.com/api/?name=${formData.name}`} alt="" className="w-full h-full object-cover" />
                 </div>
-                <div className="flex-1 space-y-2">
+                <div className="flex-1 w-full space-y-3">
                   <input 
                     type="text" 
                     value={formData.avatar}
@@ -598,7 +604,7 @@ export function ProfilePage() {
                           reader.readAsDataURL(file);
                         }
                       }}
-                      className="absolute inset-0 opacity-0 cursor-pointer"
+                      className="absolute inset-0 opacity-0 cursor-pointer z-10"
                     />
                     <Button variant="outline" size="sm" className="w-full">
                       <Camera size={14} className="mr-2" />

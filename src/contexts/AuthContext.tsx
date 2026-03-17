@@ -13,6 +13,7 @@ interface User {
   gender?: string;
   experience?: number;
   rating?: number;
+  reviews_count?: number;
   is_available?: number | boolean;
 }
 

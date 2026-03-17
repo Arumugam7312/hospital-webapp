@@ -4,6 +4,7 @@ import { Button } from '../components/ui/Button';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
 import { useToast } from '../contexts/ToastContext';
+import { Link } from 'react-router-dom';
 import { 
   Users, 
   Calendar, 
@@ -18,12 +19,14 @@ import {
   TrendingUp,
   Trash2,
   Plus,
-  FileText
+  FileText,
+  Loader2,
+  Star
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export function DoctorDashboard() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const { socket } = useSocket();
   const { showToast } = useToast();
   const [appointments, setAppointments] = useState<any[]>([]);
@@ -33,8 +36,34 @@ export function DoctorDashboard() {
   const [isSavingSchedule, setIsSavingSchedule] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
   const [medicalData, setMedicalData] = useState({ diagnosis: '', prescription: '' });
+  const [isUpdatingAvailability, setIsUpdatingAvailability] = useState(false);
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+  const handleToggleAvailability = async () => {
+    if (user?.role !== 'doctor') return;
+    setIsUpdatingAvailability(true);
+    try {
+      const newStatus = user.is_available ? 0 : 1;
+      const res = await fetch(`/api/doctors/${user.id}/availability`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_available: newStatus })
+      });
+
+      if (res.ok) {
+        const updatedUser = await res.json();
+        updateUser(updatedUser);
+        showToast(`Status updated to ${newStatus ? 'Available' : 'Unavailable'}`, 'success');
+      } else {
+        showToast('Failed to update availability', 'error');
+      }
+    } catch (err) {
+      showToast('Connection error', 'error');
+    } finally {
+      setIsUpdatingAvailability(false);
+    }
+  };
 
   const fetchSchedule = () => {
     fetch(`/api/doctors/schedule/${user?.id}`)
@@ -148,24 +177,71 @@ export function DoctorDashboard() {
   };
 
   const stats = [
-    { label: "Today's Appointments", value: '18', sub: '4 remaining', icon: Calendar, color: 'text-primary', bg: 'bg-primary/10' },
-    { label: 'Total Patients', value: '1,240', sub: '+12 this week', icon: Users, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-    { label: 'Upcoming Slots', value: '6', sub: 'Next: 02:00 PM', icon: Clock, color: 'text-purple-500', bg: 'bg-purple-500/10' },
+    { 
+      label: "Today's Appointments", 
+      value: appointments.filter(a => a.date === new Date().toISOString().split('T')[0]).length.toString(), 
+      sub: `${appointments.filter(a => a.date === new Date().toISOString().split('T')[0] && a.status === 'pending').length} pending`, 
+      icon: Calendar, 
+      color: 'text-primary', 
+      bg: 'bg-primary/10' 
+    },
+    { 
+      label: 'Cancelled', 
+      value: appointments.filter(a => a.status === 'cancelled').length.toString(), 
+      sub: 'Total cancelled', 
+      icon: AlertCircle, 
+      color: 'text-red-500', 
+      bg: 'bg-red-500/10' 
+    },
+    { 
+      label: 'Rating', 
+      value: user?.rating?.toFixed(1) || '0.0', 
+      sub: `${user?.reviews_count || 0} reviews`, 
+      icon: Star, 
+      color: 'text-yellow-500', 
+      bg: 'bg-yellow-500/10' 
+    },
   ];
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap justify-between items-end gap-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white mb-2">Welcome, {user?.name}</h1>
-          <p className="text-slate-500 dark:text-slate-400">You have 18 appointments scheduled for today. 4 are priority cases.</p>
+          <h1 className="text-2xl md:text-3xl font-black tracking-tight text-slate-900 dark:text-white mb-2">Welcome, {user?.name}</h1>
+          <p className="text-sm md:text-base text-slate-500 dark:text-slate-400">
+            You have {appointments.filter(a => a.date === new Date().toISOString().split('T')[0]).length} appointments scheduled for today.
+          </p>
         </div>
-        <div className="flex gap-3">
-          <Button variant="outline" onClick={() => setShowScheduleModal(true)}>Manage Schedule</Button>
-          <Button>
-            <PlusCircle className="mr-2" size={18} />
-            Add Patient
+        <div className="flex flex-wrap gap-2 md:gap-3 w-full md:w-auto">
+          <Button 
+            onClick={handleToggleAvailability}
+            disabled={isUpdatingAvailability}
+            variant="outline"
+            className={cn(
+              "transition-all duration-300 border-2 flex-1 md:flex-none min-w-[120px] md:min-w-[140px] h-9 md:h-11",
+              user?.is_available 
+                ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:border-emerald-800 dark:text-emerald-400" 
+                : "bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100 dark:bg-rose-900/20 dark:border-rose-800 dark:text-rose-400"
+            )}
+          >
+            {isUpdatingAvailability ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              <div className="flex items-center gap-2">
+                <div className={cn(
+                  "size-2 rounded-full animate-pulse",
+                  user?.is_available ? "bg-emerald-500" : "bg-rose-500"
+                )} />
+                <span className="font-bold uppercase tracking-wider text-[10px]">
+                  {user?.is_available ? 'Available' : 'Unavailable'}
+                </span>
+              </div>
+            )}
           </Button>
+          <Link to="/doctor/schedule">
+            <Button variant="outline">Manage Schedule</Button>
+          </Link>
+          <Button variant="outline" onClick={() => setShowScheduleModal(true)}>Weekly Availability</Button>
         </div>
       </div>
 
@@ -361,7 +437,7 @@ export function DoctorDashboard() {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                          <img src={`https://i.pravatar.cc/150?u=${appt.patient_name}`} alt="" />
+                          <img src={appt.patient_avatar || `https://ui-avatars.com/api/?name=${appt.patient_name}`} alt="" />
                         </div>
                         <span className="font-bold text-slate-900 dark:text-white">{appt.patient_name}</span>
                       </div>
